@@ -1,0 +1,15 @@
+# Archivos de entorno
+.env
+
+# Dependencias del proyecto
+node_modules/
+
+# Archivos de log
+npm-debug.log*
+
+# Directorios de producción
+dist/
+build/
+
+# Archivos de caché
+.cache/
