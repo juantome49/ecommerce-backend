@@ -12,7 +12,9 @@ const port = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
-
+app.get('/', (req, res) => {
+    res.send('El servidor está funcionando correctamente.');
+});
 // Definición del esquema para el modelo de usuario
 const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
