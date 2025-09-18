@@ -2,6 +2,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 dotenv.config();
 
@@ -11,7 +13,15 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Definición de los modelos para MongoDB
+// Definición del esquema para el modelo de usuario
+const userSchema = new mongoose.Schema({
+  username: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+}, { timestamps: true });
+
+const User = mongoose.model('User', userSchema);
+
+// Definición de los modelos para productos y carrito
 const productSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
   description: { type: String, required: true },
@@ -32,36 +42,75 @@ const cartSchema = new mongoose.Schema({
 
 const Cart = mongoose.model('Cart', cartSchema);
 
-// Función para poblar la base de datos con productos de ejemplo
-const seedDatabase = async () => {
-    try {
-        const existingProducts = await Product.countDocuments();
-        if (existingProducts === 0) {
-            const products = [
-                { name: "Auriculares inalámbricos", description: "Auriculares con cancelación de ruido.", price: 99.99, stock: 50, category: "Electrónicos", imageUrl: "https://via.placeholder.com/250/007bff/FFFFFF?text=Auriculares" },
-                { name: "Mouse Gamer", description: "Mouse de alta precisión con luces LED.", price: 45.50, stock: 75, category: "Electrónicos", imageUrl: "https://via.placeholder.com/250/007bff/FFFFFF?text=Mouse" },
-                { name: "Sudadera con capucha", description: "Sudadera de algodón suave, ideal para el día a día.", price: 29.99, stock: 120, category: "Ropa", imageUrl: "https://via.placeholder.com/250/007bff/FFFFFF?text=Sudadera" },
-            ];
-            await Product.insertMany(products);
-            console.log('Base de datos poblada con éxito.');
-        } else {
-            console.log('La base de datos ya contiene productos.');
-        }
-    } catch (error) {
-        console.error('Error al poblar la base de datos:', error);
+// Middleware para verificar el token JWT y proteger rutas
+const auth = (req, res, next) => {
+  try {
+    const token = req.headers.authorization.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ message: 'No hay token, autorización denegada' });
     }
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (error) {
+    res.status(401).json({ message: 'El token no es válido' });
+  }
 };
 
 // Conexión a MongoDB
 mongoose.connect(process.env.MONGO_URI)
   .then(() => {
     console.log('Conexión a MongoDB exitosa');
-    seedDatabase();
   })
   .catch(err => console.error('Error de conexión a MongoDB:', err));
 
+// Rutas de autenticación
+app.post('/api/register', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    const existingUser = await User.findOne({ username });
+    if (existingUser) {
+      return res.status(400).json({ message: 'El usuario ya existe' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const newUser = new User({ username, password: hashedPassword });
+    await newUser.save();
+    
+    // Aquí podrías generar un token para el usuario si quieres
+    res.status(201).json({ message: 'Usuario registrado con éxito' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error en el registro del usuario', error });
+  }
+});
+
+app.post('/api/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    const user = await User.findOne({ username });
+
+    if (!user) {
+      return res.status(400).json({ message: 'Credenciales incorrectas' });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: 'Credenciales incorrectas' });
+    }
+
+    // Creación del token JWT
+    const payload = { id: user._id, username: user.username };
+    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
+
+    res.status(200).json({ message: 'Inicio de sesión exitoso', accessToken: token });
+  } catch (error) {
+    res.status(500).json({ message: 'Error en el inicio de sesión', error });
+  }
+});
+
 // Rutas de la API para productos (Admin y Cliente)
-app.post('/api/products', async (req, res) => {
+// Protegemos la ruta POST con el middleware de autenticación
+app.post('/api/products', auth, async (req, res) => {
   try {
     const newProduct = new Product(req.body);
     const savedProduct = await newProduct.save();
