@@ -1,49 +1,54 @@
-const backendURL = 'https://ecommerce-backend-byu5.onrender.com';
+const express = require('express');
+const cors = require('cors');
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-document.addEventListener('DOMContentLoaded', () => {
-    const products = [
-        { id: 1, name: "Reloj Clásico", price: 250, image: "https://via.placeholder.com/250x250/B38E5A/121212?text=RELOJ" },
-        { id: 2, name: "Pulsera de Cuero", price: 80, image: "https://via.placeholder.com/250x250/B38E5A/121212?text=PULSERA" },
-        { id: 3, name: "Gemelos de Lujo", price: 150, image: "https://via.placeholder.com/250x250/B38E5A/121212?text=GEMELOS" }
-    ];
+// Base de datos simple en memoria
+const productos = [
+    { id: 1, name: "Reloj Clásico", price: 250, image: "https://via.placeholder.com/400x500/0A0A0A/F0F0F0?text=RELOJ" },
+    { id: 2, name: "Pulsera de Cuero", price: 80, image: "https://via.placeholder.com/400x500/0A0A0A/F0F0F0?text=PULSERA" },
+    { id: 3, name: "Gemelos de Lujo", price: 150, image: "https://via.placeholder.com/400x500/0A0A0A/F0F0F0?text=GEMELOS" },
+    { id: 4, name: "Corbata de Seda", price: 60, image: "https://via.placeholder.com/400x500/0A0A0A/F0F0F0?text=CORBATA" }
+];
 
-    const productsContainer = document.getElementById('productos-container');
+let carrito = []; // El carrito estará vacío al inicio
 
-    products.forEach(product => {
-        const productCard = document.createElement('div');
-        productCard.classList.add('product-card');
-        productCard.innerHTML = `
-            <img src="${product.image}" alt="${product.name}">
-            <h3>${product.name}</h3>
-            <p>$${product.price.toFixed(2)}</p>
-            <button class="btn-add" data-id="${product.id}">Agregar al Carrito</button>
-        `;
-        productsContainer.appendChild(productCard);
+// Middleware para procesar JSON y permitir CORS
+app.use(express.json());
+app.use(cors());
+
+// Ruta de prueba
+app.get('/', (req, res) => {
+  res.send('¡Servidor de e-commerce en funcionamiento!');
+});
+
+// Ruta para obtener todos los productos
+app.get('/api/productos', (req, res) => {
+  res.json(productos);
+});
+
+// Ruta para agregar un producto al carrito
+app.post('/api/carrito', (req, res) => {
+  const { productId } = req.body;
+  const productToAdd = productos.find(p => p.id == productId);
+
+  if (productToAdd) {
+    carrito.push(productToAdd);
+    console.log(`Producto con ID ${productId} añadido. Carrito actual:`, carrito);
+    res.status(200).json({ 
+        message: 'Producto añadido al carrito con éxito.',
+        cartCount: carrito.length
     });
+  } else {
+    res.status(404).json({ message: 'Producto no encontrado.' });
+  }
+});
 
-    // Añadir el listener a los botones después de que se han creado
-    document.querySelectorAll('.btn-add').forEach(button => {
-        button.addEventListener('click', (event) => {
-            const productId = event.target.dataset.id;
-            const quantity = 1; // Por ahora, la cantidad es 1
+// Ruta para obtener el contenido del carrito
+app.get('/api/carrito', (req, res) => {
+    res.json(carrito);
+});
 
-            // Enviar la solicitud POST al backend
-            fetch(`${backendURL}/api/carrito`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ productId, quantity }),
-            })
-            .then(response => response.json())
-            .then(data => {
-                alert(data.message); // Muestra un mensaje de éxito
-                console.log('Respuesta del backend:', data);
-            })
-            .catch(error => {
-                console.error('Error al agregar producto:', error);
-                alert('Hubo un error al añadir el producto al carrito.');
-            });
-        });
-    });
+app.listen(PORT, () => {
+  console.log(`Servidor escuchando en el puerto ${PORT}`);
 });
